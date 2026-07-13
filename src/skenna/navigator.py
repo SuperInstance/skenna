@@ -15,6 +15,15 @@ from typing import List, Optional, Union
 from skenna.hazard import Hazard, HazardType
 from skenna.space import Space, Path, Point, BoundingBox
 from skenna.planner import AvoidancePlanner
+from skenna.cognitive import (
+    CognitiveNavigator,
+    ModelChart,
+    Sounding,
+    ChartThickness,
+    CognitiveDimension,
+    CognitiveRoute,
+    ConsensusReport,
+)
 
 
 class NegativeSpaceNavigator:
@@ -42,6 +51,7 @@ class NegativeSpaceNavigator:
         self.safe_space: Optional[Space] = None
         self._bounds = bounds
         self._planner = AvoidancePlanner()
+        self._cognitive: Optional[CognitiveNavigator] = None
 
     def add_hazard(self, hazard: Hazard) -> None:
         """
@@ -52,6 +62,16 @@ class NegativeSpaceNavigator:
         """
         self.hazards.append(hazard)
         self.safe_space = None  # Invalidate cache
+
+    def hazard_register(self, hazard: Hazard) -> None:
+        """
+        Register a known hazard — same as add_hazard but with the
+        navigator's vocabulary: you REGISTER hazards (like a ship's
+        hazard register) rather than adding them.
+
+        This is the cognitive-layer alias for add_hazard.
+        """
+        self.add_hazard(hazard)
 
     def remove_hazard(self, index: int) -> Hazard:
         """Remove a hazard by index. Returns the removed hazard."""
@@ -188,3 +208,91 @@ class NegativeSpaceNavigator:
 
     def __repr__(self) -> str:
         return f"NegativeSpaceNavigator(hazards={len(self.hazards)})"
+
+    # ------------------------------------------------------------------
+    # Cognitive navigation layer
+    # ------------------------------------------------------------------
+
+    def explore(
+        self,
+        query: str,
+        model: str,
+        handler=None,
+    ) -> Sounding:
+        """
+        Send a query to a thin-chart model and capture what it discovers
+        in η space.
+
+        This is the first phase of the Socratic protocol: the thin model
+        explores the negative space that the thick model cannot see.
+
+        Args:
+            query: The question to explore.
+            model: Name of the model to query.
+            handler: Optional callable (query) -> response.
+
+        Returns:
+            A Sounding record of what was found in η.
+        """
+        self._ensure_cognitive()
+        return self._cognitive.explore(query, model, handler)
+
+    def route(
+        self,
+        query: str,
+        models,
+        handlers=None,
+    ) -> CognitiveRoute:
+        """
+        Execute the Socratic protocol: thin model discovers, thick model synthesizes.
+
+        Cast the thin-chart model first (discovery), then the thick-chart
+        model (synthesis). The elder's η is the mini's γ.
+
+        Args:
+            query: The question to explore and then synthesize.
+            models: List of model names, thinnest to thickest.
+            handlers: Optional per-model handler overrides.
+
+        Returns:
+            A CognitiveRoute describing the full Socratic journey.
+        """
+        self._ensure_cognitive()
+        return self._cognitive.route(query, models, handlers)
+
+    def sound_depth(self, model: str, dimension: CognitiveDimension) -> float:
+        """
+        Estimate η depth for a model in a cognitive dimension.
+
+        High η depth = lots of potential for discovery (thin chart).
+        Low η depth = well-charted territory (thick chart).
+        """
+        self._ensure_cognitive()
+        return self._cognitive.sound_depth(model, dimension)
+
+    def consensus(self, models, query: str, handlers=None) -> ConsensusReport:
+        """
+        Run N models, find where their γ overlaps (consensus) and
+        where it diverges (discovery).
+
+        Where charts agree = safe passage on all charts.
+        Where charts disagree = the most valuable information.
+        """
+        self._ensure_cognitive()
+        return self._cognitive.consensus(models, query, handlers)
+
+    def register_model(self, chart: ModelChart, handler=None) -> None:
+        """
+        Register a model with its cognitive chart for navigation.
+
+        Args:
+            chart: The model's cognitive chart (γ allocation).
+            handler: Optional callable (query) -> response.
+        """
+        self._ensure_cognitive()
+        self._cognitive.register_model(chart, handler)
+
+    def _ensure_cognitive(self) -> None:
+        """Lazy-initialize the cognitive navigator."""
+        if self._cognitive is None:
+            self._cognitive = CognitiveNavigator()
